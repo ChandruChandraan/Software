@@ -59,6 +59,15 @@ class Settings(BaseSettings):
         default=30.0, description="Seconds a process must run before crash count resets"
     )
 
+    # Unreal Engine Management
+    UNREAL_AUTOSTART: bool = Field(
+        default=True, description="Whether to launch Unreal Engine automatically on startup"
+    )
+    UNREAL_EXE_PATH: str = Field(
+        default=r"F:\Shooter\FiringSimulator\Unreal\FiringSim\Package\V1\Windows\FiringSim.exe",
+        description="Path to packaged Unreal Engine executable"
+    )
+
     # Security
     LOCAL_ONLY_MANAGEMENT: bool = Field(
         default=True, description="Restrict process start/stop/restart endpoints to localhost"

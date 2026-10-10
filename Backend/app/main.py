@@ -4,6 +4,7 @@ import asyncio
 from contextlib import asynccontextmanager
 import logging
 from pathlib import Path
+import sys
 import time
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -42,6 +43,7 @@ async def lifespan(app: FastAPI):
 
     # 1. Initialize services
     tracker_state = TrackerState(telemetry_timeout=settings.TRACKER_TELEMETRY_TIMEOUT)
+    tracker_state.reset_shots()
     udp_listener = TrackerUDPListener(
         host=settings.UDP_HOST,
         port=settings.UDP_PORT,
@@ -53,12 +55,28 @@ async def lifespan(app: FastAPI):
         ws_manager=ws_manager,
     )
 
+    tracker_dir = BASE_DIR.parent / "Tracker"
+    root_venv_python = BASE_DIR.parent / ".venv" / "Scripts" / "python.exe"
+    if not root_venv_python.exists():
+        root_venv_python = Path(sys.executable)
+
+    from app.services.simulation_services import UnrealService, OverlayService
+    unreal_service = UnrealService(ws_manager=ws_manager)
+    overlay_service = OverlayService(
+        ws_manager=ws_manager,
+        tracker_dir=tracker_dir,
+        python_exe=root_venv_python,
+    )
+
     # Attach to app.state
     app.state.settings = settings
     app.state.tracker_state = tracker_state
     app.state.udp_listener = udp_listener
     app.state.process_manager = process_manager
     app.state.ws_manager = ws_manager
+    app.state.unreal_service = unreal_service
+    app.state.overlay_service = overlay_service
+
 
     # 2. Start UDP listener
     udp_started = await udp_listener.start()
@@ -88,6 +106,15 @@ async def lifespan(app: FastAPI):
         else:
             logger.warning(f"Tracker autostart did not launch process: {msg}")
 
+    # 4. Autostart Unreal Engine if configured
+    if getattr(settings, "UNREAL_AUTOSTART", True):
+        logger.info("Automatic Unreal Engine launch enabled. Starting Unreal Engine...")
+        unreal_started, unreal_msg = await unreal_service.start()
+        if unreal_started:
+            logger.info(f"Unreal Engine autostart: {unreal_msg}")
+        else:
+            logger.warning(f"Unreal Engine autostart did not launch: {unreal_msg}")
+
     logger.info(f"Backend HTTP server ready at http://{settings.BACKEND_HOST}:{settings.BACKEND_PORT}")
 
     # Yield control to FastAPI request handling
@@ -96,15 +123,33 @@ async def lifespan(app: FastAPI):
     # Shutdown sequence
     logger.info("Shutting down FiringSim Backend...")
 
-    # 1. Stop child Tracker process
+    # 1. Stop Projector Overlay if running or enabled
+    try:
+        is_overlay_running, _ = overlay_service.is_running()
+        if is_overlay_running:
+            logger.info("Stopping Projector Overlay on shutdown...")
+            await overlay_service.stop()
+    except Exception as e:
+        logger.warning(f"Error closing overlay on shutdown: {e}")
+
+    # 2. Stop Unreal Engine if running
+    try:
+        is_unreal_running, _ = unreal_service.is_running()
+        if is_unreal_running:
+            logger.info("Stopping Unreal Engine on shutdown...")
+            await unreal_service.stop()
+    except Exception as e:
+        logger.warning(f"Error stopping Unreal Engine on shutdown: {e}")
+
+    # 3. Stop child Tracker process
     if process_manager.is_running():
         logger.info("Stopping managed Tracker process...")
         await process_manager.stop_tracker()
 
-    # 2. Close UDP listener
+    # 4. Close UDP listener
     await udp_listener.stop()
 
-    # 3. Close remaining WebSocket connections
+    # 5. Close remaining WebSocket connections
     for client in list(ws_manager.active_connections):
         try:
             await client.close()

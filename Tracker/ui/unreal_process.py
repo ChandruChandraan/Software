@@ -139,8 +139,9 @@ class UnrealManager:
             f"-WinY={display.y}",
             f"-ResX={display.width}",
             f"-ResY={display.height}",
-            "-WINDOWED",
-            "-Borderless",
+            "-fullscreen",
+            "-borderless",
+            "-forceres",
             "-NoVSync",
         ]
 

@@ -127,3 +127,35 @@ class TrackerActionResponse(BaseModel):
     success: bool
     message: str
     status: TrackerProcessStatus
+
+
+class DisplayInfoModel(BaseModel):
+    """Physical monitor or projector metadata."""
+
+    index: int
+    name: str
+    x: int
+    y: int
+    width: int
+    height: int
+    is_primary: bool
+
+
+class UnrealStatusModel(BaseModel):
+    """Unreal Engine process state and executable metadata."""
+
+    is_running: bool
+    pid: Optional[int] = None
+    exe_path: str
+    exe_exists: bool
+
+
+class OverlayStatusModel(BaseModel):
+    """Projector reticle overlay window state."""
+
+    is_running: bool
+    pid: Optional[int] = None
+    target_display: Optional[int] = None
+    target_resolution: Optional[str] = None
+    active_identity: Optional[str] = None
+

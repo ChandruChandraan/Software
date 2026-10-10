@@ -26,10 +26,22 @@ class TrackerState:
         # Gun states keyed by gun_id
         self._guns: Dict[int, GunStateModel] = {}
         self.total_shots: int = 0
+        self._shot_offsets: Dict[int, int] = {}
 
         # Ring buffers for live UI feed & diagnostics
         self.recent_events: deque = deque(maxlen=100)
         self.recent_errors: deque = deque(maxlen=50)
+
+    def reset_shots(self):
+        """Resets all gun shot counters and total shots to zero."""
+        self.total_shots = 0
+        for gun in self._guns.values():
+            gun.shot_count = 0
+            gun.last_shot_time = None
+            gun.last_shot_coords = None
+        self._shot_offsets.clear()
+        self.recent_events.clear()
+        logger.info("Gun Fire Shots and shot counters initialized and reset to zero.")
 
     def get_telemetry_freshness(self) -> Literal["connected", "stale", "disconnected"]:
         """
@@ -67,7 +79,7 @@ class TrackerState:
         )
 
     def handle_gun_status(self, packet: GunStatusPacket) -> GunStateModel:
-        """Updates gun state from validated gun_status UDP packet."""
+        """Updates gun state from validated gun_status UDP packet. Keepalive packets never overwrite shot counts."""
         now = time.time()
         self.packets_received += 1
         self.last_packet_time = now
@@ -81,7 +93,7 @@ class TrackerState:
                 lane=packet.lane,
                 port=packet.port,
                 connected=packet.connected,
-                shot_count=packet.shot_count,
+                shot_count=0,
                 last_seen=now,
             )
             self._guns[packet.gun] = gun
@@ -90,7 +102,6 @@ class TrackerState:
             if packet.port is not None:
                 gun.port = packet.port
             gun.connected = packet.connected
-            gun.shot_count = max(gun.shot_count, packet.shot_count)
             gun.last_seen = now
 
         # Gun state updated from packet; keepalives do not flood recent_events
@@ -111,7 +122,7 @@ class TrackerState:
                 gun_id=packet.gun,
                 lane=packet.lane,
                 connected=True,
-                shot_count=packet.round,
+                shot_count=1,
                 last_seen=now,
                 last_shot_time=now,
                 last_shot_coords={"x": packet.x, "y": packet.y},
@@ -120,7 +131,7 @@ class TrackerState:
         else:
             gun.lane = packet.lane
             gun.connected = True
-            gun.shot_count = max(gun.shot_count, packet.round)
+            gun.shot_count += 1
             gun.last_seen = now
             gun.last_shot_time = now
             gun.last_shot_coords = {"x": packet.x, "y": packet.y}
@@ -132,7 +143,7 @@ class TrackerState:
             "lane": packet.lane,
             "x": packet.x,
             "y": packet.y,
-            "round": packet.round,
+            "round": gun.shot_count,
             "cross_lane": packet.cross_lane,
             "display_width": packet.display_width,
             "display_height": packet.display_height,

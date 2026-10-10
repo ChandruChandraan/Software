@@ -74,13 +74,14 @@ class DashboardWindow(QMainWindow):
     def __init__(self, target_url: str):
         super().__init__()
         self.target_url = target_url
+        self._enforce_fullscreen: bool = True
 
-        self.setWindowTitle("FiringSim — Tactical Operations Console")
-        self.resize(1380, 880)
-        self.setMinimumSize(1024, 680)
+        self.setWindowTitle("FiringSim — Control Center")
+        # Enforce full screen mode by default
+        self.setWindowState(Qt.WindowState.WindowFullScreen)
 
-        # Sleek dark window background matching dashboard theme
-        self.setStyleSheet("background-color: #0a0c10;")
+        # Sleek dark window background matching dashboard theme (Shadcn Dark #09090b)
+        self.setStyleSheet("background-color: #09090b;")
 
         central_widget = QWidget(self)
         self.setCentralWidget(central_widget)
@@ -91,21 +92,62 @@ class DashboardWindow(QMainWindow):
 
         # Configure WebEngine
         self.web_view = QWebEngineView(self)
-        self.web_view.setStyleSheet("background-color: #0a0c10;")
-        self.web_view.page().setBackgroundColor(QColor("#0a0c10"))
+        self.web_view.setStyleSheet("background-color: #09090b;")
+        self.web_view.page().setBackgroundColor(QColor("#09090b"))
 
         settings_view = self.web_view.settings()
         settings_view.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
         settings_view.setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, True)
         settings_view.setAttribute(QWebEngineSettings.WebAttribute.WebGLEnabled, True)
+        settings_view.setAttribute(QWebEngineSettings.WebAttribute.FullScreenSupportEnabled, True)
+
+        # Connect WebEngine full-screen and close requests
+        self.web_view.page().fullScreenRequested.connect(lambda req: req.accept())
+        self.web_view.page().windowCloseRequested.connect(self.close)
 
         layout.addWidget(self.web_view)
 
         # Load dashboard URL
         self.web_view.load(QUrl(self.target_url))
 
+    def keyPressEvent(self, event):
+        """Keyboard shortcuts: F11 toggles fullscreen mode."""
+        if event.key() == Qt.Key.Key_F11:
+            if self.isFullScreen():
+                self._enforce_fullscreen = False
+                self.showNormal()
+            else:
+                self._enforce_fullscreen = True
+                self.showFullScreen()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def changeEvent(self, event):
+        """Preserve fullscreen mode when restored or window state changes."""
+        if event.type() == event.Type.WindowStateChange:
+            if self._enforce_fullscreen and not self.isMinimized() and not self.isFullScreen():
+                self.showFullScreen()
+        super().changeEvent(event)
+
     def closeEvent(self, event):
-        """Cleanly close window, release web engine resources, and signal backend shutdown."""
+        """Cleanly close window, terminate running simulation processes (Overlay, Unreal, Tracker), and signal backend shutdown."""
+        # 1. Instruct backend to stop all running simulation components
+        try:
+            import urllib.request
+            host = settings.BACKEND_HOST
+            port = settings.BACKEND_PORT
+            req = urllib.request.Request(
+                f"http://{host}:{port}/api/tracker/all/stop",
+                data=b"{}",
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            urllib.request.urlopen(req, timeout=1.5)
+        except Exception:
+            pass
+
+        # 2. Release WebEngine resources
         try:
             self.web_view.load(QUrl("about:blank"))
             self.web_view.stop()
@@ -113,16 +155,23 @@ class DashboardWindow(QMainWindow):
         except Exception:
             pass
 
+        # 3. Signal backend server to exit
         global server_instance
         if server_instance is not None:
             server_instance.should_exit = True
         event.accept()
 
+        # 4. Immediate clean exit of desktop process
+        def _force_exit():
+            time.sleep(0.3)
+            os._exit(0)
+        threading.Thread(target=_force_exit, daemon=True).start()
+
 
 
 def main():
     app = QApplication(sys.argv)
-    app.setApplicationName("FiringSim Tactical Console")
+    app.setApplicationName("FiringSim Control Center")
 
     host = settings.BACKEND_HOST
     port = settings.BACKEND_PORT
@@ -143,7 +192,8 @@ def main():
             retries -= 1
 
     window = DashboardWindow(dashboard_url)
-    window.show()
+    # Always launch in fullscreen mode
+    window.showFullScreen()
 
     sys.exit(app.exec())
 
