@@ -1,122 +1,141 @@
-# Firing Simulator — Multi-Gun USB Serial & Projector Tracker
+# Firing Simulator — Headless Tracker Service
 
-Python 3.12+ multi-gun controller coordinator, multi-layer projector overlay, and Unreal Engine 5.8 UDP integration.
+High-speed headless multi-gun hardware coordinator, USB serial processor, and dual-destination UDP streaming daemon for the Firing Training Simulator.
+
+---
+
+## 1. Architecture Overview
 
 ```
 Arduino Gun 1 (COMx) ──┐
-Arduino Gun 2 (COMy) ──┼──► SerialDeviceManager ──► MultiGunManager ──► UDP Client ──► Unreal Engine 5.8
-Arduino Gun 3 (COMz) ──┤          (115200 Baud)         │ (Isolated)     (Port 47000)
-Arduino Gun 4 (COMw) ──┘                                ▼
-                                              Projector Overlay
-                                          (Individual Gun Layers)
+Arduino Gun 2 (COMy) ──┼──► SerialDeviceManager ──► MultiGunManager ──► UDP Client ──► Unreal Engine 5.8 (Port 47000)
+Arduino Gun 3 (COMz) ──┤          (115200 Baud)         │                             └─► FastAPI Backend  (Port 47001)
+Arduino Gun 4 (COMw) ──┘                                │
+                                                        ▼
+                                           Separate Projector Overlay
+                                             (`python overlay.py`)
 ```
+
+- **Tracker Daemon (`Tracker.exe`)**: Completely **headless**. No window or GUI dashboard. Manages USB serial connections, watchdog keepalives, sequence validation, and dual UDP packet transmission.
+- **Projector Overlay (`overlay.py`)**: Standalone transparent projector reticle overlay window run separately when physical projector calibration/aim projection is needed.
+- **Instructor Console**: The **single unified UI** for simulator monitoring and control.
 
 ---
 
-## 1. Project Structure
+## 2. Directory Structure
 
 ```
 Tracker/
+├── core/
+│   ├── config.py              # Network IPs, ports, and hardware parameters
+│   └── gun_state.py           # Independent per-gun state and MultiGunManager
+├── devices/
+│   └── serial_manager.py      # Non-blocking USB serial manager & 4-gun simulation
+├── network/
+│   └── udp_client.py          # Low-latency UDP client (Unreal: 47000, Backend: 47001)
+├── ui/
+│   ├── display_manager.py     # Win32 display detection and projector metrics
+│   ├── overlay_window.py      # Independent multi-layer projector overlay window
+│   └── unreal_process.py      # Unreal Engine process lifecycle manager
+├── dist/
+│   └── Tracker.exe            # Self-contained headless Windows executable
 ├── Guns/
-│   └── Guns.ino                 # Microcontroller firmware with configurable GUN_ID
-├── python_tracker/
-│   ├── main.py                  # Full-size desktop coordinator & control dashboard
-│   ├── core/                    # Core state and configuration
-│   │   ├── config.py            # Central configuration & color palettes
-│   │   └── gun_state.py         # Independent Per-Gun State & MultiGunManager
-│   ├── devices/                 # Microcontroller & hardware serial communication
-│   │   └── serial_manager.py    # Non-blocking USB Serial Manager & 4-Gun Simulator
-│   ├── network/                 # Unreal Engine UDP telemetry
-│   │   └── udp_client.py        # Non-blocking UDP client (Port 47000)
-│   ├── ui/                      # Visual overlays, displays, and window management
-│   │   ├── display_manager.py   # Windows multi-display and projector discovery
-│   │   ├── overlay_window.py    # Multi-layer projector overlay window
-│   │   └── unreal_process.py    # Unreal process lifecycle & display positioning
-│   ├── requirements.txt         # Python dependencies (PySide6, pyserial)
-│   └── README.md                # Documentation and testing guide
+│   └── Guns.ino               # Arduino microcontroller firmware
+├── config/
+│   └── tracker_config.json    # JSON runtime configuration
+├── headless_tracker.py        # Core headless daemon runner
+├── main.py                    # Root service launcher (runs headless daemon)
+├── overlay.py                 # Standalone projector overlay application launcher
+├── requirements.txt           # Dependencies
+└── README.md                  # This file
 ```
 
 ---
 
-## 2. Requirements & Installation
+## 3. Running the Tracker
 
-- **Python:** 3.12+
-- **OS:** Windows 10 / 11
-
-### Virtual Environment Setup
-
+### A. Run Headless Executable
 ```powershell
-cd f:\Shooter\FiringSimulator\Tracker
+.\dist\Tracker.exe
+```
 
-# Activate virtual environment
-.venv\Scripts\activate
+### B. Command-Line Options
+```powershell
+.\dist\Tracker.exe --help
 
-# Install dependencies
-pip install -r python_tracker/requirements.txt
+Options:
+  --unreal-host <ip>        Unreal UDP host (Default: 127.0.0.1)
+  --unreal-port <port>      Unreal UDP port (Default: 47000)
+  --backend-host <ip>       Backend UDP host (Default: 127.0.0.1)
+  --backend-port <port>     Backend UDP port (Default: 47001)
+  --no-backend              Disable telemetry streaming to Backend
+  --no-sim                  Disable simulated virtual guns (real hardware only)
+  --sim-guns <count>        Number of simulated virtual guns (Default: 4)
+  --launch-unreal           Auto-launch Unreal Engine process
+  --display-width <px>      Target display viewport width (Default: 1920)
+  --display-height <px>     Target display viewport height (Default: 1080)
+  --log-level <level>       Logging verbosity: DEBUG, INFO, WARNING, ERROR
+```
 
-# Run application
-python python_tracker/main.py
+### C. Running from Source
+```powershell
+# Using software suite virtual environment:
+..\.venv\Scripts\python.exe main.py
+```
+
+### D. Launching the Standalone Projector Overlay
+```powershell
+..\.venv\Scripts\python.exe overlay.py
 ```
 
 ---
 
-## 3. Microcontroller Serial Protocol
+## 4. Telemetry Contracts
 
-Each controller connects via USB Serial at **115200 baud** sending newline-delimited JSON:
+### Unreal Engine (UDP Port 47000)
+Sent once per valid trigger edge pull:
+```json
+{
+  "type": "shot",
+  "gun": 1,
+  "lane": 1,
+  "x": 960,
+  "y": 540,
+  "cross_lane": false,
+  "round": 1,
+  "display_width": 1920,
+  "display_height": 1080
+}
+```
 
-| Event | JSON Payload | Description |
-| :--- | :--- | :--- |
-| **Startup Handshake** | `{"type":"hello","gun":1,"version":1}` | Identifies Gun ID and registers port |
-| **Keepalive Heartbeat** | `{"type":"heartbeat","gun":1}` | Sent every 1 second (watchdog timeout = 3.0s) |
-| **Trigger Pressed** | `{"type":"trigger","gun":1,"state":1,"seq":1}` | Rising-edge triggers shot |
-| **Trigger Released** | `{"type":"trigger","gun":1,"state":0,"seq":2}` | Releases trigger state |
+### Python Backend (UDP Port 47001)
+1. Shot Event:
+```json
+{
+  "v": 1,
+  "type": "shot",
+  "gun": 1,
+  "lane": 1,
+  "x": 960,
+  "y": 540,
+  "display_width": 1920,
+  "display_height": 1080,
+  "round": 1,
+  "cross_lane": false,
+  "time_us": 1728471234567890
+}
+```
 
----
-
-## 4. Multi-Gun Features
-
-### Independent Per-Gun State (`core/gun_state.py`)
-- Each gun maintains its own isolated coordinates (`latest_x`, `latest_y`), `lane`, `cross_lane`, `trigger_state`, and `shot_count`.
-- **Zero coordinate leakage**: Gun 1's aim is never shared with Gun 2.
-- **No fabricated data**: Shots without valid aim coordinates are flagged rather than borrowing coordinates from another gun.
-
-### Multi-Layer Projector Overlay (`ui/overlay_window.py`)
-- One single borderless fullscreen host window placed on the selected projector screen.
-- Independent configurable layers for each Gun ID:
-  - Distinctive visual reticle and color palette (Gun 1 Neon Green, Gun 2 Cyan, Gun 3 Coral Red, Gun 4 Amber Gold).
-  - Gun ID badge, connection status dot, coordinate readout, and lane tag.
-  - Per-gun shot feedback banners.
-  - Independent visibility toggle per gun.
-- Two Modes:
-  - **Individual Tracking Mode**: Each gun reticle follows its own aim coordinates.
-  - **Diagnostic Mode**: Status panel displaying real-time telemetry for all guns simultaneously.
-
-### Non-blocking Serial Device Manager (`devices/serial_manager.py`)
-- Dedicated worker threads per connected port preventing UI thread stalls.
-- Auto-discovery of newly plugged controllers.
-- Manual port-to-Gun-ID assignment.
-- **Simulated Controller Mode**: Generates 4 virtual controllers for immediate hardware-free testing.
-
----
-
-## 5. Verification & Testing
-
-### TEST 1: Virtual Multi-Gun Simulation (No Hardware Needed)
-1. Launch `python python_tracker/main.py`.
-2. Click **Enable 4 Virtual Guns**.
-3. **Verify:** Guns 1, 2, 3, and 4 connect in the table, receiving keepalive heartbeats.
-4. Click **FIRE** next to Gun 2:
-   - Only Gun 2's shot count increments.
-   - An isolated Gun 2 UDP shot packet is sent to Unreal Engine (`"gun": 2`).
-   - Gun 1 and Gun 3 are completely unaffected.
-
-### TEST 2: Overlay Multi-Gun Visualization
-1. With overlay active, switch between **Mode: Tracking** and **Mode: Diagnostic**.
-2. Uncheck the "Overlay" checkbox for Gun 3:
-   - Gun 3's layer disappears while Guns 1, 2, and 4 remain rendered.
-
-### TEST 3: Physical Hardware Testing
-1. Flash [Guns.ino](../Guns/Guns.ino) to an Arduino with `#define GUN_ID 1`.
-2. Flash a second Arduino with `#define GUN_ID 2`.
-3. Plug in both boards via USB.
-4. Python automatically detects the incoming `hello` packets and associates each board with its respective Gun ID.
+2. Gun Status Event:
+```json
+{
+  "v": 1,
+  "type": "gun_status",
+  "gun": 1,
+  "lane": 1,
+  "port": "COM4",
+  "connected": true,
+  "shot_count": 1,
+  "time_us": 1728471234567890
+}
+```

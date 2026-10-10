@@ -1,37 +1,39 @@
-from fastapi.testclient import TestClient
-from app.main import app
-
-client = TestClient(app)
+"""Tests for health and diagnostic REST endpoints."""
 
 
-def test_system_health():
-    response = client.get("/system/health")
+def test_get_health(client):
+    """Verify basic health endpoint returns status and uptime."""
+    response = client.get("/api/health")
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "ok"
-    assert data["service"] == "backend"
-    assert data["database"] == "ok"
+    assert "uptime_seconds" in data
+    assert "version" in data
+    assert "timestamp" in data
 
 
-def test_system_licence():
-    response = client.get("/system/licence")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "active"
-
-
-def test_system_settings():
-    response = client.get("/system/settings")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["udp_listen_port"] == 47001
-
-
-def test_system_health_details():
-    response = client.get("/system/health/details")
+def test_get_health_details(client):
+    """Verify detailed health diagnostics include listener, process, and telemetry."""
+    response = client.get("/api/health/details")
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "ok"
-    assert data["database"] == "ok"
-    assert "udp_listener" in data
-    assert data["udp_listener"]["port"] == 47001
+    assert "backend_host" in data
+    assert "backend_port" in data
+
+    # UDP listener status
+    listener = data["udp_listener"]
+    assert "status" in listener
+    assert "packets_received" in listener
+    assert "invalid_packets" in listener
+
+    # Process manager status
+    process = data["tracker_process"]
+    assert "running" in process
+    assert "mode" in process
+    assert "target_path" in process
+
+    # Telemetry status
+    telemetry = data["tracker_telemetry"]
+    assert "freshness" in telemetry
+    assert telemetry["freshness"] in ["connected", "stale", "disconnected"]
