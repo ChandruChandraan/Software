@@ -142,14 +142,22 @@ class TrackerProcessManager:
             self.record_log_line("system", f"Stopping Tracker process (PID: {pid})...")
 
             try:
-                self._process.terminate()
+                if sys.platform == "win32" and pid:
+                    import subprocess
+                    subprocess.run(
+                        ["taskkill", "/F", "/T", "/PID", str(pid)],
+                        capture_output=True,
+                        creationflags=subprocess.CREATE_NO_WINDOW,
+                    )
+                else:
+                    self._process.terminate()
+
                 try:
-                    await asyncio.wait_for(self._process.wait(), timeout=3.0)
+                    await asyncio.wait_for(self._process.wait(), timeout=1.5)
                 except asyncio.TimeoutError:
-                    logger.warning(f"Tracker (PID {pid}) did not terminate within 3s, killing forcefully...")
-                    self.record_log_line("system", "Process unresponsive, issuing kill...")
-                    self._process.kill()
-                    await self._process.wait()
+                    if self._process:
+                        self._process.kill()
+                        await self._process.wait()
             except ProcessLookupError:
                 pass
             except Exception as e:

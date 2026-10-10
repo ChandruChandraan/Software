@@ -1,5 +1,4 @@
-"""Pydantic data schemas for UDP packets, REST APIs, and WebSocket payloads."""
-
+import time
 from typing import Dict, List, Literal, Optional, Any
 from pydantic import BaseModel, Field
 
@@ -158,4 +157,75 @@ class OverlayStatusModel(BaseModel):
     target_display: Optional[int] = None
     target_resolution: Optional[str] = None
     active_identity: Optional[str] = None
+
+
+# ==============================================================================
+# Scenario Models & Unreal Protocol
+# ==============================================================================
+
+
+class ScenarioInfo(BaseModel):
+    """Metadata for a selectable simulation scenario."""
+
+    scenario_id: str = Field(..., description="Stable scenario identifier (e.g. 'indoor_range')")
+    display_name: str = Field(..., description="Human-readable scenario display name")
+    description: Optional[str] = Field(default=None, description="Detailed scenario description")
+    available: bool = Field(default=True, description="Whether scenario assets are installed and available")
+
+
+class ScenarioListResponse(BaseModel):
+    """List response for available simulation scenarios."""
+
+    scenarios: List[ScenarioInfo] = Field(default_factory=list, description="Available scenarios")
+    total: int = Field(default=0, description="Total number of registered scenarios")
+
+
+class ScenarioChangeRequest(BaseModel):
+    """Request payload to initiate a scenario change."""
+
+    scenario_id: str = Field(..., min_length=1, description="Registered scenario identifier")
+
+
+class ScenarioChangeResponse(BaseModel):
+    """Immediate acknowledgement returned when a scenario change is requested."""
+
+    request_id: str = Field(..., description="Unique correlation tracking ID")
+    scenario_id: str = Field(..., description="Requested scenario ID")
+    scenario: str = Field(..., description="Exact scenario identifier mapped to Unreal Engine")
+    status: Literal["pending", "sent", "accepted", "completed", "failed", "timeout"] = Field(
+        ..., description="Current status of the scenario change request"
+    )
+    message: str = Field(..., description="Human-readable status summary")
+    timestamp: float = Field(default_factory=time.time, description="Unix timestamp of the response")
+
+
+class ScenarioStatusEvent(BaseModel):
+    """Payload broadcast over WebSocket /ws/backend for scenario lifecycle updates."""
+
+    request_id: str = Field(..., description="Correlated request ID")
+    scenario_id: str = Field(..., description="Scenario identifier")
+    scenario: str = Field(..., description="Unreal level/scenario name")
+    status: Literal["pending", "sent", "accepted", "completed", "failed", "timeout"] = Field(
+        ..., description="Current status"
+    )
+    message: Optional[str] = Field(default=None, description="Status detail message")
+    error: Optional[str] = Field(default=None, description="Error explanation if status is failed or timeout")
+    timestamp: float = Field(default_factory=time.time, description="Unix timestamp of event")
+
+
+class ScenarioAckPacket(BaseModel):
+    """Inbound UDP acknowledgement packet from Unreal Engine (Port 47001)."""
+
+    v: int = Field(default=1, description="Protocol version")
+    type: Literal["scenario_ack", "scenario_status"] = Field(
+        default="scenario_ack", description="Packet type"
+    )
+    request_id: str = Field(..., description="Correlated scenario request ID")
+    status: Literal["accepted", "completed", "failed", "ignored", "loaded", "rejected"] = Field(
+        ..., description="Result status from Unreal"
+    )
+    scenario: Optional[str] = Field(default=None, description="Unreal level name")
+    message: Optional[str] = Field(default=None, description="Optional detail message from Unreal")
+    error: Optional[str] = Field(default=None, description="Optional error message from Unreal")
+    time_us: Optional[int] = Field(default=None, description="Microsecond timestamp")
 

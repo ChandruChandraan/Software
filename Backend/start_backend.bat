@@ -43,7 +43,7 @@ if not exist "%BACKEND_DIR%.venv\Scripts\python.exe" (
 
 echo [4/4] Starting FiringSim Backend Application...
 echo.
-echo Dashboard URL: http://127.0.0.1:8000/
+echo Dashboard URL: http://127.0.0.1:8080/
 echo UDP Listener : 127.0.0.1:47001
 echo.
 

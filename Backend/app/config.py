@@ -23,9 +23,9 @@ def resolve_path(path_str: str, relative_to: Path = BASE_DIR) -> Path:
 class Settings(BaseSettings):
     """Backend server and tracker configuration settings."""
 
-    # Server settings
+    # Server settings (Port 8080 avoids verified conflict with Unreal Engine 5.8 HTTPServer on port 8000)
     BACKEND_HOST: str = Field(default="127.0.0.1", description="FastAPI bind host")
-    BACKEND_PORT: int = Field(default=8000, description="FastAPI HTTP port")
+    BACKEND_PORT: int = Field(default=8080, description="FastAPI HTTP port")
 
     # UDP Listener settings
     UDP_HOST: str = Field(default="127.0.0.1", description="UDP listener bind host")
@@ -67,6 +67,26 @@ class Settings(BaseSettings):
         default=r"F:\Shooter\FiringSimulator\Unreal\FiringSim\Package\V1\Windows\FiringSim.exe",
         description="Path to packaged Unreal Engine executable"
     )
+    UNREAL_UDP_HOST: str = Field(
+        default="127.0.0.1", description="Unreal Engine UDP command destination host"
+    )
+    UNREAL_UDP_PORT: int = Field(
+        default=47000, description="Unreal Engine UDP command destination port"
+    )
+    SCENARIO_COMMAND_TIMEOUT: float = Field(
+        default=5.0, description="Timeout in seconds awaiting Unreal scenario acknowledgement"
+    )
+    SCENARIO_DEBOUNCE_SECONDS: float = Field(
+        default=2.0, description="Minimum seconds between duplicate scenario change requests"
+    )
+    UNREAL_CONTENT_DIR: Optional[str] = Field(
+        default=r"F:\Shooter\FiringSimulator\Unreal\FiringSim\Content",
+        description="Path to Unreal Engine Content directory for verifying map assets",
+    )
+    SCENARIOS_JSON_PATH: Optional[str] = Field(
+        default=str(BASE_DIR / "scenarios.json"),
+        description="Path to JSON file for scenario catalog definitions",
+    )
 
     # Security
     LOCAL_ONLY_MANAGEMENT: bool = Field(
@@ -100,6 +120,26 @@ class Settings(BaseSettings):
         if parent_venv_python.exists():
             return str(parent_venv_python)
         return sys.executable
+
+    def get_unreal_content_dir(self) -> Optional[Path]:
+        """Get the absolute path to Unreal Content directory if it exists."""
+        if self.UNREAL_CONTENT_DIR:
+            p = resolve_path(self.UNREAL_CONTENT_DIR)
+            if p.exists():
+                return p
+        # Fallback relative to project root
+        candidate = (BASE_DIR.parent.parent / "Unreal" / "FiringSim" / "Content").resolve()
+        if candidate.exists():
+            return candidate
+        return None
+
+    def get_scenarios_json_path(self) -> Optional[Path]:
+        """Get the resolved path to scenarios.json if configured or present."""
+        if self.SCENARIOS_JSON_PATH:
+            p = resolve_path(self.SCENARIOS_JSON_PATH)
+            return p
+        candidate = (BASE_DIR / "scenarios.json").resolve()
+        return candidate if candidate.exists() else None
 
 
 # Default settings singleton

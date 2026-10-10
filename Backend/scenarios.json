@@ -1,0 +1,42 @@
+[
+  {
+    "scenario_id": "indoor_range",
+    "display_name": "Indoor Shooting Range",
+    "unreal_name": "IndoorRange",
+    "relative_map_path": "Maps/IndoorRange.umap",
+    "description": "Indoor 4-lane precision marksmanship range",
+    "default_available": true
+  },
+  {
+    "scenario_id": "range_basic",
+    "display_name": "Basic Target Range",
+    "unreal_name": "Range_Basic",
+    "relative_map_path": "Maps/Range_Basic.umap",
+    "description": "Standard outdoor target marksmanship facility",
+    "default_available": true
+  },
+  {
+    "scenario_id": "training_range_01",
+    "display_name": "Training Range 01",
+    "unreal_name": "Training_Range_01",
+    "relative_map_path": "Maps/IndoorRange.umap",
+    "description": "Standard qualification course on Training Range 01",
+    "default_available": true
+  },
+  {
+    "scenario_id": "tactical_shooting_range",
+    "display_name": "Tactical Shooting Range",
+    "unreal_name": "ShootingRange",
+    "relative_map_path": "ShootingRange/Maps/ShootingRange.umap",
+    "description": "Complex range with reactive steel and pop-up targets (not cooked in V1 package)",
+    "default_available": false
+  },
+  {
+    "scenario_id": "range_overview",
+    "display_name": "Range Aerial Overview",
+    "unreal_name": "Overview",
+    "relative_map_path": "ShootingRange/Maps/Overview.umap",
+    "description": "Wide-angle vantage point for spectator overview (not cooked in V1 package)",
+    "default_available": false
+  }
+]

@@ -55,13 +55,34 @@ def main():
         threading.Thread(target=_open, daemon=True).start()
 
     # NOTE: reload is explicitly False to avoid duplicate process hierarchies
-    uvicorn.run(
-        "app.main:app",
-        host=args.host,
-        port=args.port,
-        reload=False,
-        log_level=settings.LOG_LEVEL.lower(),
-    )
+    try:
+        uvicorn.run(
+            "app.main:app",
+            host=args.host,
+            port=args.port,
+            reload=False,
+            log_level=settings.LOG_LEVEL.lower(),
+        )
+    finally:
+        # Guarantee no orphaned tracker or overlay processes linger on shutdown
+        if sys.platform == "win32":
+            try:
+                import subprocess
+                ps_script = (
+                    "Get-CimInstance Win32_Process | "
+                    "Where-Object { ($_.Name -like 'python*' -or $_.Name -like 'FiringSim*') -and "
+                    "($_.CommandLine -like '*headless_tracker*' -or $_.CommandLine -like '*Tracker*main.py*' "
+                    "-or $_.CommandLine -like '*overlay.py*') } | "
+                    "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
+                )
+                subprocess.run(
+                    ["powershell", "-NoProfile", "-Command", ps_script],
+                    capture_output=True,
+                    creationflags=subprocess.CREATE_NO_WINDOW,
+                    timeout=3.0,
+                )
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":

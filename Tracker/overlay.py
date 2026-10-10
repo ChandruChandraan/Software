@@ -37,7 +37,8 @@ class OverlayTelemetryBridge(QObject):
         self._connect_ws()
 
     def _connect_ws(self):
-        backend_url = f"ws://{config.BACKEND_IP}:{config.BACKEND_PORT}/ws/backend"
+        http_port = getattr(config, "BACKEND_HTTP_PORT", 8080)
+        backend_url = f"ws://{config.BACKEND_IP}:{http_port}/ws/backend"
         self.ws.open(QUrl(backend_url))
 
     def _on_disconnected(self):

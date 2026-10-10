@@ -12,10 +12,10 @@ Hardware Microcontrollers (COMx) / Virtual Guns (SIM-1..4)
                        ▼
           Headless Tracker Service (Tracker/main.py)
            ├── Port 47000 (UDP) ──► Unreal Engine 5.8 (Direct Shot Delivery)
-           └── Port 47001 (UDP) ──► FastAPI Backend (Port 8000)
+           └── Port 47001 (UDP) ──► FastAPI Backend (Port 8080)
                                       ├── In-Memory Gun Fleet State
                                       ├── Process Lifecycle Watchdog
-                                      ├── REST API (/api/health, /api/tracker)
+                                      ├── REST API (/api/health, /api/tracker, /api/scenarios)
                                       ├── WebSocket (/ws/backend)
                                       └── Operations Dashboard (/)
 ```
@@ -110,7 +110,7 @@ This batch script will:
 3. Install required dependencies on first run.
 4. Launch the Backend HTTP server and UDP listener.
 5. Automatically spawn the headless Tracker daemon.
-6. Serve the dashboard at `http://127.0.0.1:8000/`.
+6. Serve the dashboard at `http://127.0.0.1:8080/`.
 
 ### B. Launching from Python Terminal
 ```powershell
@@ -122,7 +122,7 @@ Optional CLI flags:
 - `--open-browser`: Automatically opens the dashboard in your default browser.
 - `--no-tracker`: Disables automatic Tracker subprocess launching.
 - `--host <ip>`: Bind host (default: `127.0.0.1`).
-- `--port <port>`: Bind port (default: `8000`).
+- `--port <port>`: Bind port (default: `8080`).
 
 ---
 
@@ -133,7 +133,7 @@ Settings can be overridden in a `.env` file placed in `Backend/` (see `.env.exam
 | Variable | Default | Description |
 |---|---|---|
 | `BACKEND_HOST` | `127.0.0.1` | FastAPI HTTP bind IP |
-| `BACKEND_PORT` | `8000` | FastAPI HTTP port |
+| `BACKEND_PORT` | `8080` | FastAPI HTTP port (8080 avoids verified collision with Unreal Engine 5.8 HTTPServer on port 8000) |
 | `UDP_HOST` | `127.0.0.1` | UDP listener bind host |
 | `UDP_PORT` | `47001` | UDP listener port for Tracker telemetry |
 | `TRACKER_AUTOSTART` | `true` | Launch Tracker automatically on startup |
@@ -175,7 +175,7 @@ Settings can be overridden in a `.env` file placed in `Backend/` (see `.env.exam
 
 ## 6. How to Confirm Tracker Connectivity
 
-1. Open `http://127.0.0.1:8000/` in your browser.
+1. Open `http://127.0.0.1:8080/` in your browser.
 2. Verify the top header status pills:
    - **Backend**: Green (Uptime running)
    - **Tracker Process**: Green (e.g. `Running (PID 4748)`)
@@ -193,10 +193,11 @@ Settings can be overridden in a `.env` file placed in `Backend/` (see `.env.exam
 
 ## 7. Troubleshooting
 
-### Port Conflicts (WinError 10048)
-If port 8000 or 47001 is already in use by another running instance:
+### Port Conflicts (WinError 10048 / Epic Games HTTPServer)
+- **Port 8000 Conflict**: Unreal Engine 5.8 runs an internal HTTP server (`RemoteControl`/`ModelContextProtocol`) that listens on `127.0.0.1:8000`. To prevent conflicts, FiringSim Backend binds to port `8080`.
+- If port `8080` or `47001` is already in use:
 ```powershell
-Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | Select-Object OwningProcess
+Get-NetTCPConnection -LocalPort 8080 -ErrorAction SilentlyContinue | Select-Object OwningProcess
 Stop-Process -Id <OwningProcess> -Force
 ```
 

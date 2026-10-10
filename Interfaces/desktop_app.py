@@ -36,7 +36,7 @@ try:
 except Exception:
     class _FallbackSettings:
         BACKEND_HOST: str = "127.0.0.1"
-        BACKEND_PORT: int = 8000
+        BACKEND_PORT: int = 8080
 
     settings = _FallbackSettings()
 
@@ -46,12 +46,59 @@ import uvicorn
 server_instance: uvicorn.Server | None = None
 
 
+def is_backend_healthy(host: str, port: int) -> bool:
+    """Verifies if FiringSim FastAPI backend is running and healthy on host:port."""
+    try:
+        import urllib.request
+        import json
+        req = urllib.request.Request(
+            f"http://{host}:{port}/api/health",
+            headers={"User-Agent": "FiringSim-Desktop"},
+        )
+        with urllib.request.urlopen(req, timeout=0.6) as resp:
+            if resp.status == 200:
+                data = json.loads(resp.read().decode())
+                return data.get("status") == "ok"
+    except Exception:
+        pass
+    return False
 
-def is_port_in_use(port: int, host: str = "127.0.0.1") -> bool:
-    """Checks if a TCP port is actively listening."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.settimeout(0.3)
-        return s.connect_ex((host, port)) == 0
+
+def is_port_bindable(port: int, host: str = "127.0.0.1") -> bool:
+    """Checks if a TCP port can be bound exclusively by this process."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        s.bind((host, port))
+        s.close()
+        return True
+    except OSError:
+        return False
+
+
+def resolve_backend_port(host: str, preferred_port: int) -> int:
+    """
+    Resolves the actual port to connect or bind to.
+    Handles verified port conflicts (e.g., Unreal Engine 5.8 HTTPServer on port 8000).
+    """
+    # 1. If backend is already running and healthy on preferred_port, use it directly
+    if is_backend_healthy(host, preferred_port):
+        return preferred_port
+
+    # 2. If preferred_port is free to bind, use it
+    if is_port_bindable(preferred_port, host):
+        return preferred_port
+
+    # 3. Port is occupied by a foreign process (such as Unreal Editor on 8000)
+    print(f"[Desktop App] Port {preferred_port} is in use by another application (e.g., Unreal Engine HTTPServer). Finding conflict-free port...")
+    candidate_ports = [8080, 8088, 8001, 8888, 9000]
+    for port in candidate_ports:
+        if port == preferred_port:
+            continue
+        if is_backend_healthy(host, port) or is_port_bindable(port, host):
+            print(f"[Desktop App] Selected conflict-free backend port: {port}")
+            return port
+
+    return preferred_port
 
 
 def start_backend_in_thread(host: str, port: int):
@@ -71,9 +118,11 @@ def start_backend_in_thread(host: str, port: int):
 class DashboardWindow(QMainWindow):
     """Standalone native desktop window hosting the HTML/CSS operations dashboard."""
 
-    def __init__(self, target_url: str):
+    def __init__(self, target_url: str, host: str = "127.0.0.1", port: int = 8080):
         super().__init__()
         self.target_url = target_url
+        self.host = host
+        self.port = port
         self._enforce_fullscreen: bool = True
 
         self.setWindowTitle("FiringSim — Control Center")
@@ -132,13 +181,11 @@ class DashboardWindow(QMainWindow):
 
     def closeEvent(self, event):
         """Cleanly close window, terminate running simulation processes (Overlay, Unreal, Tracker), and signal backend shutdown."""
-        # 1. Instruct backend to stop all running simulation components
+        # 1. Instruct backend to stop all running simulation components and exit cleanly
         try:
             import urllib.request
-            host = settings.BACKEND_HOST
-            port = settings.BACKEND_PORT
             req = urllib.request.Request(
-                f"http://{host}:{port}/api/tracker/all/stop",
+                f"http://{self.host}:{self.port}/api/tracker/app/exit",
                 data=b"{}",
                 headers={"Content-Type": "application/json"},
                 method="POST",
@@ -155,16 +202,35 @@ class DashboardWindow(QMainWindow):
         except Exception:
             pass
 
-        # 3. Signal backend server to exit
+        # 3. Signal backend server to exit if running in-thread
         global server_instance
         if server_instance is not None:
             server_instance.should_exit = True
         event.accept()
 
-        # 4. Immediate clean exit of desktop process
+        # 4. Immediate clean exit of desktop process and cleanup of any lingering simulator background processes
         def _force_exit():
-            time.sleep(0.3)
+            time.sleep(0.5)
+            if sys.platform == "win32":
+                try:
+                    ps_script = (
+                        "Get-CimInstance Win32_Process | "
+                        "Where-Object { ($_.Name -like 'python*' -or $_.Name -like 'FiringSim*') -and "
+                        "($_.CommandLine -like '*headless_tracker*' -or $_.CommandLine -like '*Tracker*main.py*' "
+                        "-or $_.CommandLine -like '*overlay.py*' -or $_.CommandLine -like '*start_backend.py*') } | "
+                        "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
+                    )
+                    import subprocess
+                    subprocess.run(
+                        ["powershell", "-NoProfile", "-Command", ps_script],
+                        capture_output=True,
+                        creationflags=subprocess.CREATE_NO_WINDOW,
+                        timeout=3.0,
+                    )
+                except Exception:
+                    pass
             os._exit(0)
+
         threading.Thread(target=_force_exit, daemon=True).start()
 
 
@@ -173,25 +239,26 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName("FiringSim Control Center")
 
-    host = settings.BACKEND_HOST
-    port = settings.BACKEND_PORT
+    host = getattr(settings, "BACKEND_HOST", "127.0.0.1")
+    preferred_port = getattr(settings, "BACKEND_PORT", 8080)
+    port = resolve_backend_port(host, preferred_port)
     dashboard_url = f"http://{host}:{port}/"
 
-    # Start backend server if not already running
-    if not is_port_in_use(port, host):
+    # Start backend server if not already running and healthy
+    if not is_backend_healthy(host, port):
         print(f"[Desktop App] Starting backend server on {host}:{port}...")
         backend_thread = threading.Thread(
             target=start_backend_in_thread, args=(host, port), daemon=True
         )
         backend_thread.start()
 
-        # Wait briefly for server to bind
-        retries = 30
-        while retries > 0 and not is_port_in_use(port, host):
+        # Wait for backend health endpoint to respond
+        retries = 50
+        while retries > 0 and not is_backend_healthy(host, port):
             time.sleep(0.1)
             retries -= 1
 
-    window = DashboardWindow(dashboard_url)
+    window = DashboardWindow(dashboard_url, host=host, port=port)
     # Always launch in fullscreen mode
     window.showFullScreen()
 

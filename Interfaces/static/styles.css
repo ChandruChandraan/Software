@@ -618,6 +618,28 @@ body {
   box-shadow: 0 0 8px var(--accent-amber);
 }
 
+.status-dot.amber {
+  background-color: var(--accent-amber);
+  box-shadow: 0 0 8px var(--accent-amber);
+}
+
+.status-dot.cyan {
+  background-color: var(--accent-cyan);
+  box-shadow: 0 0 8px var(--accent-cyan);
+}
+
+.status-dot.cyan::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  border-radius: 50%;
+  border: 1px solid var(--accent-cyan);
+  animation: pulse-ring 2s infinite;
+}
+
 .status-dot.red {
   background-color: var(--accent-rose);
   box-shadow: 0 0 8px var(--accent-rose);
@@ -802,7 +824,230 @@ body {
 }
 
 /* ==============================================================================
-   SECTION: Panoramic Operations Row (Fleet Matrix + Live Telemetry Feed)
+   SECTION 01: Scenario Selection & Status Deck
+   ============================================================================== */
+
+.scenario-deck-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.scenario-deck-card {
+  padding: 16px 20px;
+  background: #09090b;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.scenario-simple-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.scenario-current-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 220px;
+}
+
+.scenario-select-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 260px;
+}
+
+.scenario-action-block {
+  display: flex;
+  align-items: flex-end;
+}
+
+@media (max-width: 800px) {
+  .scenario-simple-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+  .scenario-action-block .btn {
+    width: 100%;
+  }
+}
+
+.scenario-field-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.scenario-current-val {
+  font-size: 18px;
+  font-weight: 700;
+  color: #38bdf8;
+  letter-spacing: -0.01em;
+}
+
+.scenario-telemetry-grid {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.scenario-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.scenario-meta-val {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.scenario-control-col {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  width: 100%;
+}
+
+.scenario-select-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.scenario-select-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.scenario-select-input {
+  width: 100%;
+  padding: 8px 12px;
+  background-color: #18181b;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  outline: none;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.scenario-select-input:hover:not(:disabled) {
+  border-color: #71717a;
+  background-color: #27272a;
+}
+
+.scenario-select-input:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+}
+
+.scenario-select-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.scenario-select-input option {
+  background-color: #18181b;
+  color: var(--text-primary);
+  padding: 8px;
+}
+
+.scenario-desc-box {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  min-height: 18px;
+}
+
+.scenario-action-group {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding-top: 20px;
+}
+
+.btn-change-scenario {
+  white-space: nowrap;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  background-color: #fafafa;
+  color: #18181b;
+  border-radius: var(--radius-md);
+  gap: 6px;
+}
+
+.btn-change-scenario:hover:not(:disabled) {
+  background-color: #e4e4e7;
+}
+
+.scenario-error-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background-color: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  color: #f87171;
+  font-size: 12.5px;
+}
+
+.scenario-error-icon {
+  font-size: 14px;
+}
+
+.scenario-error-text {
+  flex: 1;
+}
+
+.scenario-error-close {
+  background: transparent;
+  border: none;
+  color: #f87171;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.scenario-error-close:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.btn-spinner {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+  font-size: 14px;
+  line-height: 1;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ==============================================================================
+   SECTION 02: Panoramic Operations Row (Fleet Matrix + Live Telemetry Feed)
    ============================================================================== */
 
 .panoramic-operations-row {

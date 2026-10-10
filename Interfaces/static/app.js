@@ -16,6 +16,13 @@ let maxFeedItems = 50;
 
 let sessionStart = Date.now();
 
+// Scenario Management State
+let availableScenarios = [];
+let selectedScenarioId = "";
+let currentScenarioName = "Indoor Shooting Range";
+let currentRequestId = "—";
+let isScenarioRequestPending = false;
+
 // Purge any storage immediately upon script load
 try {
   localStorage.clear();
@@ -46,6 +53,8 @@ async function initDashboard() {
   // 3. Reset backend shots to guarantee previous session values (like 59/70) are wiped
   await resetBackendShots();
   await fetchRestSnapshot();
+  await loadScenarios();
+  await fetchActiveScenarioStatus();
   connectWebSocket();
   startUptimeTicker();
 }
@@ -219,6 +228,10 @@ async function fetchRestSnapshot() {
       const dispData = await dispRes.json();
       updateDisplaysUI(dispData);
     }
+
+    // Refresh scenarios and active status snapshot
+    loadScenarios();
+    fetchActiveScenarioStatus();
   } catch (err) {
     console.error("Error fetching REST snapshot:", err);
   }
@@ -244,8 +257,10 @@ function connectWebSocket() {
         clearTimeout(reconnectTimer);
         reconnectTimer = null;
       }
-      // Re-sync REST snapshot on reconnect
+      // Re-sync REST snapshot and scenario status on reconnect
       fetchRestSnapshot();
+      loadScenarios();
+      fetchActiveScenarioStatus();
     };
 
     ws.onmessage = (event) => {
@@ -259,15 +274,18 @@ function connectWebSocket() {
 
     ws.onclose = () => {
       updateWsStatus("disconnected", "Reconnecting");
+      updateScenarioButtonState();
       scheduleReconnect();
     };
 
     ws.onerror = (err) => {
       console.error("[WS] Error:", err);
+      updateScenarioButtonState();
       ws.close();
     };
   } catch (err) {
     updateWsStatus("disconnected", "Offline");
+    updateScenarioButtonState();
     scheduleReconnect();
   }
 }
@@ -328,6 +346,9 @@ function handleWsEvent(msg) {
       if (data && data.guns) {
         updateGunsTable(data.guns);
       }
+      break;
+    case "scenario_change_status":
+      handleScenarioStatusEvent(data);
       break;
     default:
       break;
@@ -1366,5 +1387,169 @@ function showToast(message, type = "info", duration = 4000) {
 window.alert = function (msg) {
   showToast(String(msg), "warning", 5000);
 };
+
+/**
+ * =============================================================================
+ * Scenario Selection & Unreal Engine Level Transition Management
+ * =============================================================================
+ */
+
+async function loadScenarios() {
+  const selectEl = document.getElementById("scenario-select-dropdown");
+  const descEl = document.getElementById("scenario-desc-text");
+  if (!selectEl) return;
+
+  try {
+    const res = await fetch("/api/scenarios");
+    if (!res.ok) {
+      console.warn("[Scenario] Failed to fetch scenarios list:", res.status);
+      return;
+    }
+    const scenarios = await res.json();
+    if (!Array.isArray(scenarios)) return;
+
+    availableScenarios = scenarios;
+
+    // Preserve previously selected scenario if still in list
+    const previousSelection = selectEl.value;
+
+    selectEl.innerHTML = "";
+
+    if (scenarios.length === 0) {
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = "No scenarios configured";
+      opt.disabled = true;
+      opt.selected = true;
+      selectEl.appendChild(opt);
+      if (descEl) descEl.textContent = "No scenarios available on backend.";
+      updateScenarioButtonState();
+      return;
+    }
+
+    scenarios.filter((sc) => sc.available).forEach((sc) => {
+      const opt = document.createElement("option");
+      opt.value = sc.scenario_id;
+      opt.textContent = sc.display_name;
+      selectEl.appendChild(opt);
+    });
+
+    // Restore or pick first available
+    let matchedOpt = null;
+    if (previousSelection) {
+      matchedOpt = scenarios.find((s) => s.scenario_id === previousSelection && s.available);
+    }
+    if (!matchedOpt) {
+      matchedOpt = scenarios.find((s) => s.available) || scenarios[0];
+    }
+
+    if (matchedOpt) {
+      selectEl.value = matchedOpt.scenario_id;
+      selectedScenarioId = matchedOpt.scenario_id;
+      if (descEl) descEl.textContent = matchedOpt.description || "No description provided.";
+    }
+
+    updateScenarioButtonState();
+  } catch (err) {
+    console.error("[Scenario] Error loading scenarios:", err);
+  }
+}
+
+function onScenarioSelectChange() {
+  const selectEl = document.getElementById("scenario-select-dropdown");
+  const descEl = document.getElementById("scenario-desc-text");
+  if (!selectEl) return;
+
+  selectedScenarioId = selectEl.value;
+  const matched = availableScenarios.find((s) => s.scenario_id === selectedScenarioId);
+  if (matched && descEl) {
+    descEl.textContent = matched.description || "No description provided.";
+  }
+  updateScenarioButtonState();
+}
+
+async function fetchActiveScenarioStatus() {
+  try {
+    const res = await fetch("/api/scenarios/active");
+    if (res.ok) {
+      const data = await res.json();
+      handleScenarioStatusEvent(data);
+    }
+  } catch (err) {
+    // Normal before any scenario command has been dispatched
+    console.debug("[Scenario] No active scenario command snapshot:", err);
+  }
+}
+
+function updateCurrentScenarioDisplay(displayName) {
+  currentScenarioName = displayName;
+  const currentEl = document.getElementById("current-scenario-name");
+  const sideEl = document.getElementById("side-scenario-name");
+  if (currentEl) currentEl.textContent = displayName;
+  if (sideEl) sideEl.textContent = displayName;
+}
+
+function setScenarioStatusUI(state, label, detail) {
+  // Status displays removed per user requirement
+}
+
+function updateScenarioButtonState() {
+  const btn = document.getElementById("btn-change-scenario");
+  const selectEl = document.getElementById("scenario-select-dropdown");
+  if (!btn) return;
+
+  const hasSelection = selectEl && selectEl.value && selectEl.value.length > 0;
+  btn.disabled = !hasSelection;
+}
+
+function showScenarioError(msg) {
+  const banner = document.getElementById("scenario-error-banner");
+  const textEl = document.getElementById("scenario-error-text");
+  if (banner && textEl) {
+    textEl.textContent = msg;
+    banner.style.display = "flex";
+  }
+}
+
+function dismissScenarioError() {
+  const banner = document.getElementById("scenario-error-banner");
+  if (banner) {
+    banner.style.display = "none";
+  }
+}
+
+async function requestScenarioChange() {
+  const selectEl = document.getElementById("scenario-select-dropdown");
+  const scenarioId = selectEl ? selectEl.value : selectedScenarioId;
+
+  if (!scenarioId) {
+    showToast("Please select a scenario first", "warning");
+    return;
+  }
+
+  const selectedObj = availableScenarios.find((s) => s.scenario_id === scenarioId);
+  const targetName = selectedObj ? selectedObj.display_name : scenarioId;
+
+  // Immediately update current scenario display without waiting or checking
+  updateCurrentScenarioDisplay(targetName);
+  showToast(`Scenario changed to ${targetName}`, "success");
+
+  // Send change command to backend directly (fire-and-forget)
+  try {
+    fetch("/api/scenarios/change", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scenario_id: scenarioId }),
+    }).catch((err) => console.warn("[Scenario] Request error:", err));
+  } catch (err) {
+    console.warn("[Scenario] Request error:", err);
+  }
+}
+
+function handleScenarioStatusEvent(data) {
+  // Fire-and-forget: do not track or check whether changed or not
+  if (!data) return;
+  console.debug("[Scenario] Status event:", data);
+}
 
 

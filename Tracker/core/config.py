@@ -4,9 +4,10 @@
 UNREAL_IP: str = "127.0.0.1"
 UNREAL_PORT: int = 47000
 
-# Python Backend UDP Settings (127.0.0.1:47001)
+# Python Backend Settings
 BACKEND_IP: str = "127.0.0.1"
-BACKEND_PORT: int = 47001
+BACKEND_PORT: int = 47001  # UDP telemetry listener port
+BACKEND_HTTP_PORT: int = 8080  # HTTP & WebSocket port
 SEND_TO_BACKEND: bool = True
 
 

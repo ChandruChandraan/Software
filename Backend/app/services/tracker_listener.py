@@ -4,10 +4,11 @@ import asyncio
 import json
 import logging
 import socket
-from typing import Optional, Tuple
+import time
+from typing import Any, Dict, Optional, Tuple
 from pydantic import ValidationError
 
-from app.schemas import ShotPacket, GunStatusPacket, UDPListenerStatus
+from app.schemas import ShotPacket, GunStatusPacket, UDPListenerStatus, ScenarioAckPacket
 from app.services.tracker_state import TrackerState
 from app.websocket.manager import ConnectionManager
 
@@ -15,11 +16,17 @@ logger = logging.getLogger("backend.udp")
 
 
 class TrackerUDPProtocol(asyncio.DatagramProtocol):
-    """Asyncio UDP datagram protocol handling inbound Tracker JSON packets."""
+    """Asyncio UDP datagram protocol handling inbound Tracker and Unreal JSON packets."""
 
-    def __init__(self, state: TrackerState, ws_manager: ConnectionManager):
+    def __init__(
+        self,
+        state: TrackerState,
+        ws_manager: ConnectionManager,
+        scenario_service: Optional[Any] = None,
+    ):
         self.state = state
         self.ws_manager = ws_manager
+        self.scenario_service = scenario_service
         self.transport: Optional[asyncio.DatagramTransport] = None
 
     def connection_made(self, transport: asyncio.DatagramTransport):
@@ -66,6 +73,13 @@ class TrackerUDPProtocol(asyncio.DatagramProtocol):
                 self._safe_broadcast("gun_status", packet.model_dump())
                 self._safe_broadcast("tracker_event", packet.model_dump())
 
+            elif msg_type in ("scenario_ack", "scenario_status"):
+                ack_packet = ScenarioAckPacket(**payload_dict)
+                self.state.packets_received += 1
+                self.state.last_packet_time = time.time()
+                if self.scenario_service:
+                    self.scenario_service.handle_ack(ack_packet)
+
             else:
                 raise ValueError(f"Unknown message type: '{msg_type}'")
 
@@ -94,11 +108,19 @@ class TrackerUDPProtocol(asyncio.DatagramProtocol):
 class TrackerUDPListener:
     """Manages the lifecycle of the asyncio UDP server endpoint."""
 
-    def __init__(self, host: str, port: int, state: TrackerState, ws_manager: ConnectionManager):
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        state: TrackerState,
+        ws_manager: ConnectionManager,
+        scenario_service: Optional[Any] = None,
+    ):
         self.host = host
         self.port = port
         self.state = state
         self.ws_manager = ws_manager
+        self.scenario_service = scenario_service
         self.transport: Optional[asyncio.DatagramTransport] = None
         self.protocol: Optional[TrackerUDPProtocol] = None
         self.is_listening: bool = False
@@ -113,7 +135,7 @@ class TrackerUDPListener:
         try:
             # Bind endpoint
             transport, protocol = await loop.create_datagram_endpoint(
-                lambda: TrackerUDPProtocol(self.state, self.ws_manager),
+                lambda: TrackerUDPProtocol(self.state, self.ws_manager, self.scenario_service),
                 local_addr=(self.host, self.port),
             )
             self.transport = transport
@@ -127,6 +149,16 @@ class TrackerUDPListener:
             self.is_listening = False
             logger.error(f"Failed to start UDP listener on {self.host}:{self.port}: {e}")
             return False
+
+    def send_to(self, data: bytes, address: Tuple[str, int]) -> bool:
+        """Sends a UDP datagram from the bound 47001 transport so Unreal routes return ACKs back here."""
+        if self.transport and not self.transport.is_closing():
+            try:
+                self.transport.sendto(data, address)
+                return True
+            except Exception as e:
+                logger.error(f"Failed to send UDP datagram via listener transport: {e}")
+        return False
 
     async def stop(self):
         """Cleanly close the UDP listener transport."""

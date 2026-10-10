@@ -96,6 +96,10 @@
           <span class="subsystem-val font-mono text-cyan" id="side-tracker-pid">—</span>
         </div>
         <div class="subsystem-row">
+          <span class="subsystem-name">Scenario</span>
+          <span class="subsystem-val font-mono text-cyan" id="side-scenario-name">Indoor Shooting Range</span>
+        </div>
+        <div class="subsystem-row">
           <span class="subsystem-name">Connected Guns</span>
           <span class="subsystem-val font-mono text-emerald" id="side-connected-guns">0 / 8</span>
         </div>
@@ -124,14 +128,64 @@
       <!-- Main Dashboard Content Grid -->
       <main class="dashboard-grid">
 
-        <!-- SECTION: PANORAMIC OPERATIONS DECK (Gun Fleet Matrix + Live Feed) -->
+        <!-- SECTION 01: SCENARIO SELECTION -->
+        <section class="scenario-deck-section" id="section-scenario-control">
+          <div class="section-header">
+            <div class="section-title-group">
+              <div class="section-heading-row">
+                <span class="section-chip">01</span>
+                <h2 class="section-title">Scenario</h2>
+              </div>
+              <span class="section-subtitle">Select a scenario and click Change</span>
+            </div>
+          </div>
+
+          <div class="scenario-deck-card glass-deck">
+            <div class="scenario-simple-bar">
+              <!-- Current Scenario Display -->
+              <div class="scenario-current-block">
+                <span class="scenario-field-label">Current Scenario</span>
+                <div class="scenario-current-val font-mono text-cyan" id="current-scenario-name">
+                  Indoor Shooting Range
+                </div>
+              </div>
+
+              <!-- Select Dropdown -->
+              <div class="scenario-select-block">
+                <label for="scenario-select-dropdown" class="scenario-field-label">Select Scenario</label>
+                <div class="scenario-select-wrap">
+                  <select id="scenario-select-dropdown" class="scenario-select-input" onchange="onScenarioSelectChange()">
+                    <option value="" disabled selected>Loading available scenarios...</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Change Button -->
+              <div class="scenario-action-block">
+                <button class="btn btn-primary btn-change-scenario" id="btn-change-scenario" onclick="requestScenarioChange()" disabled>
+                  <span class="btn-spinner" id="scenario-btn-spinner" style="display:none;">⟳</span>
+                  <span id="scenario-btn-text">Change</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Error Banner (Hidden unless error occurs) -->
+            <div class="scenario-error-banner" id="scenario-error-banner" style="display:none;">
+              <span class="scenario-error-icon">⚠</span>
+              <span class="scenario-error-text" id="scenario-error-text"></span>
+              <button class="scenario-error-close" onclick="dismissScenarioError()" title="Dismiss">✕</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- SECTION 02: PANORAMIC OPERATIONS DECK (Gun Fleet Matrix + Live Feed) -->
         <section class="panoramic-operations-row">
           <!-- Left: Simulator Weapon Fleet Table -->
           <div class="operations-column-fleet" id="section-guns-fleet">
             <div class="section-header">
               <div class="section-title-group">
                 <div class="section-heading-row">
-                  <span class="section-chip">01</span>
+                  <span class="section-chip">02</span>
                   <h2 class="section-title">Connected Guns</h2>
                 </div>
                 <span class="section-subtitle">Live status and details for all connected guns across firing lanes</span>
@@ -176,7 +230,7 @@
             <div class="section-header">
               <div class="section-title-group">
                 <div class="section-heading-row">
-                  <span class="section-chip">02</span>
+                  <span class="section-chip">03</span>
                   <h2 class="section-title">Live Shot Activity</h2>
                 </div>
                 <span class="section-subtitle">Live record of shots fired and aim positions</span>
