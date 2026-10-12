@@ -1744,14 +1744,7 @@ body {
    ============================================================================== */
 
 .toast-container {
-  position: fixed;
-  bottom: 24px;
-  right: 28px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  z-index: 10000;
-  pointer-events: none;
+  display: none !important;
 }
 
 .toast {

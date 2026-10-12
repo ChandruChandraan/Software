@@ -56,58 +56,13 @@ class ScenarioRegistry:
 
     def _load_default_scenarios(self, json_path: Optional[Union[Path, str]] = None):
         """
-        Populates default scenarios known to exist in the FiringSim Unreal project,
-        and updates or augments them with definitions from a JSON file if available.
+        Loads scenario catalog definitions directly from JSON configuration.
         """
-        default_defs = [
-            ScenarioDefinition(
-                scenario_id="indoor_range",
-                display_name="Indoor Shooting Range",
-                unreal_name="IndoorRange",
-                relative_map_path="Maps/IndoorRange.umap",
-                description="Indoor 4-lane precision marksmanship range",
-                default_available=True,
-            ),
-            ScenarioDefinition(
-                scenario_id="range_basic",
-                display_name="Basic Target Range",
-                unreal_name="Range_Basic",
-                relative_map_path="Maps/Range_Basic.umap",
-                description="Standard outdoor target marksmanship facility",
-                default_available=True,
-            ),
-            ScenarioDefinition(
-                scenario_id="training_range_01",
-                display_name="Training Range 01",
-                unreal_name="Training_Range_01",
-                relative_map_path="Maps/IndoorRange.umap",
-                description="Standard qualification course on Training Range 01",
-                default_available=True,
-            ),
-            ScenarioDefinition(
-                scenario_id="tactical_shooting_range",
-                display_name="Tactical Shooting Range",
-                unreal_name="ShootingRange",
-                relative_map_path="ShootingRange/Maps/ShootingRange.umap",
-                description="Complex range with reactive steel and pop-up targets (not cooked in V1 package)",
-                default_available=False,
-            ),
-            ScenarioDefinition(
-                scenario_id="range_overview",
-                display_name="Range Aerial Overview",
-                unreal_name="Overview",
-                relative_map_path="ShootingRange/Maps/Overview.umap",
-                description="Wide-angle vantage point for spectator overview (not cooked in V1 package)",
-                default_available=False,
-            ),
-        ]
-        for defn in default_defs:
-            self.register(defn)
-
-        # Update or augment with JSON definitions if available
         target_path = Path(json_path) if json_path else self.json_path
         if target_path and target_path.exists():
             self.update_from_json(target_path)
+        else:
+            logger.warning(f"Scenario configuration JSON file not found at: {target_path}")
 
     def update_from_json(self, json_path: Union[Path, str]) -> int:
         """

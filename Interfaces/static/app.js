@@ -1342,45 +1342,8 @@ document.addEventListener("keydown", (e) => {
  * =============================================================================
  */
 function showToast(message, type = "info", duration = 4000) {
-  const container = document.getElementById("toast-container");
-  if (!container) return;
-
-  const toast = document.createElement("div");
-  toast.className = `toast ${type}`;
-
-  const icon = document.createElement("span");
-  icon.className = "toast-icon";
-  if (type === "success") icon.textContent = "✓";
-  else if (type === "error") icon.textContent = "✕";
-  else if (type === "warning") icon.textContent = "⚠";
-  else icon.textContent = "ℹ";
-
-  const msg = document.createElement("span");
-  msg.className = "toast-message";
-  msg.textContent = message;
-
-  toast.appendChild(icon);
-  toast.appendChild(msg);
-  container.appendChild(toast);
-
-  // Trigger CSS transition
-  requestAnimationFrame(() => {
-    toast.classList.add("show");
-  });
-
-  const timer = setTimeout(() => {
-    dismiss();
-  }, duration);
-
-  function dismiss() {
-    clearTimeout(timer);
-    toast.classList.remove("show");
-    setTimeout(() => {
-      if (toast.parentNode) toast.parentNode.removeChild(toast);
-    }, 300);
-  }
-
-  toast.onclick = dismiss;
+  // Side notifications completely removed per operator request
+  return;
 }
 
 // Global browser alert override to route into tactical toast
@@ -1427,20 +1390,20 @@ async function loadScenarios() {
       return;
     }
 
-    scenarios.filter((sc) => sc.available).forEach((sc) => {
+    scenarios.forEach((sc) => {
       const opt = document.createElement("option");
       opt.value = sc.scenario_id;
       opt.textContent = sc.display_name;
       selectEl.appendChild(opt);
     });
 
-    // Restore or pick first available
+    // Restore or pick first scenario
     let matchedOpt = null;
     if (previousSelection) {
-      matchedOpt = scenarios.find((s) => s.scenario_id === previousSelection && s.available);
+      matchedOpt = scenarios.find((s) => s.scenario_id === previousSelection);
     }
     if (!matchedOpt) {
-      matchedOpt = scenarios.find((s) => s.available) || scenarios[0];
+      matchedOpt = scenarios[0];
     }
 
     if (matchedOpt) {
