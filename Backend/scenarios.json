@@ -16,8 +16,8 @@
     "default_available": true
   },
   {
-    "scenario_id": "tactical_shooting_range",
-    "display_name": "Tactical Shooting Range",
+    "scenario_id": "shooting_range",
+    "display_name": "Shooting Range",
     "unreal_name": "ShootingRange",
     "relative_map_path": "ShootingRange/Maps/ShootingRange.umap",
     "description": "Complex range with reactive steel and pop-up targets",
