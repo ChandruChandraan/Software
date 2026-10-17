@@ -61,7 +61,10 @@ async def lifespan(app: FastAPI):
     from app.services.simulation_services import UnrealService, OverlayService
 
     if not hasattr(app.state, "unreal_service") or app.state.unreal_service is None:
-        unreal_service = UnrealService(ws_manager=ws_manager)
+        unreal_service = UnrealService(
+            ws_manager=ws_manager,
+            exe_path=active_settings.UNREAL_EXE_PATH,
+        )
     else:
         unreal_service = app.state.unreal_service
 

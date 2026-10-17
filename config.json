@@ -1,0 +1,10 @@
+{
+  "unreal_exe_path": "F:\\Shooter\\FiringSimulator\\Software\\PackagedUE\\Windows\\FiringSim.exe",
+  "unreal_content_dir": "F:\\Shooter\\FiringSimulator\\Software\\PackagedUE\\Windows\\FiringSim\\Content",
+  "unreal_autostart": true,
+  "unreal_udp_host": "127.0.0.1",
+  "unreal_udp_port": 47000,
+  "backend_host": "127.0.0.1",
+  "backend_port": 8080,
+  "tracker_udp_port": 47001
+}

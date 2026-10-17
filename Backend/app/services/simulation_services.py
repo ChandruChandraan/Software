@@ -89,11 +89,13 @@ class DisplayService:
 class UnrealService:
     """Manages lifecycle and positioning of the packaged Unreal Engine application."""
 
-    DEFAULT_EXE = r"F:\Shooter\FiringSimulator\Unreal\FiringSim\Package\V1\Windows\FiringSim.exe"
-
     def __init__(self, ws_manager: ConnectionManager, exe_path: Optional[str] = None):
         self.ws_manager = ws_manager
-        self.exe_path = exe_path or self.DEFAULT_EXE
+        if exe_path:
+            self.exe_path = exe_path
+        else:
+            from app.config import settings
+            self.exe_path = settings.UNREAL_EXE_PATH
         self._proc: Optional[subprocess.Popen] = None
         self._pid: Optional[int] = None
         self._lock = threading.Lock()

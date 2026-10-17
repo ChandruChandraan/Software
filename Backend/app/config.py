@@ -59,13 +59,17 @@ class Settings(BaseSettings):
         default=30.0, description="Seconds a process must run before crash count resets"
     )
 
+    # Dynamic defaults relative to Software/
+    _DEFAULT_UNREAL_EXE = str((BASE_DIR.parent / "PackagedUE" / "Windows" / "FiringSim.exe").resolve())
+    _DEFAULT_UNREAL_CONTENT = str((BASE_DIR.parent / "PackagedUE" / "Windows" / "FiringSim" / "Content").resolve())
+
     # Unreal Engine Management
     UNREAL_AUTOSTART: bool = Field(
         default=True, description="Whether to launch Unreal Engine automatically on startup"
     )
     UNREAL_EXE_PATH: str = Field(
-        default=r"F:\Shooter\FiringSimulator\Unreal\FiringSim\Package\V1\Windows\FiringSim.exe",
-        description="Path to packaged Unreal Engine executable"
+        default=_DEFAULT_UNREAL_EXE,
+        description="Path to packaged Unreal Engine executable (configured in Software/config.json)"
     )
     UNREAL_UDP_HOST: str = Field(
         default="127.0.0.1", description="Unreal Engine UDP command destination host"
@@ -80,8 +84,8 @@ class Settings(BaseSettings):
         default=2.0, description="Minimum seconds between duplicate scenario change requests"
     )
     UNREAL_CONTENT_DIR: Optional[str] = Field(
-        default=r"F:\Shooter\FiringSimulator\Unreal\FiringSim\Content",
-        description="Path to Unreal Engine Content directory for verifying map assets",
+        default=_DEFAULT_UNREAL_CONTENT,
+        description="Path to Unreal Engine Content directory (configured in Software/config.json)",
     )
     SCENARIOS_JSON_PATH: Optional[str] = Field(
         default=str(BASE_DIR / "scenarios.json"),
@@ -101,6 +105,33 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    def __init__(self, **values):
+        central_config = BASE_DIR.parent / "config.json"
+        if central_config.exists():
+            try:
+                import json
+                with open(central_config, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+                    if "unreal_exe_path" in cfg and "UNREAL_EXE_PATH" not in values:
+                        values["UNREAL_EXE_PATH"] = cfg["unreal_exe_path"]
+                    if "unreal_content_dir" in cfg and "UNREAL_CONTENT_DIR" not in values:
+                        values["UNREAL_CONTENT_DIR"] = cfg["unreal_content_dir"]
+                    if "unreal_autostart" in cfg and "UNREAL_AUTOSTART" not in values:
+                        values["UNREAL_AUTOSTART"] = bool(cfg["unreal_autostart"])
+                    if "unreal_udp_host" in cfg and "UNREAL_UDP_HOST" not in values:
+                        values["UNREAL_UDP_HOST"] = cfg["unreal_udp_host"]
+                    if "unreal_udp_port" in cfg and "UNREAL_UDP_PORT" not in values:
+                        values["UNREAL_UDP_PORT"] = int(cfg["unreal_udp_port"])
+                    if "backend_host" in cfg and "BACKEND_HOST" not in values:
+                        values["BACKEND_HOST"] = cfg["backend_host"]
+                    if "backend_port" in cfg and "BACKEND_PORT" not in values:
+                        values["BACKEND_PORT"] = int(cfg["backend_port"])
+                    if "tracker_udp_port" in cfg and "UDP_PORT" not in values:
+                        values["UDP_PORT"] = int(cfg["tracker_udp_port"])
+            except Exception as e:
+                print(f"[Backend Config] Error loading {central_config}: {e}")
+        super().__init__(**values)
 
     def get_resolved_script_path(self) -> Path:
         """Get the absolute path to Tracker script."""
@@ -127,6 +158,10 @@ class Settings(BaseSettings):
             p = resolve_path(self.UNREAL_CONTENT_DIR)
             if p.exists():
                 return p
+        # Check PackagedUE Content
+        pkg_content = (BASE_DIR.parent / "PackagedUE" / "Windows" / "FiringSim" / "Content").resolve()
+        if pkg_content.exists():
+            return pkg_content
         # Fallback relative to project root
         candidate = (BASE_DIR.parent.parent / "Unreal" / "FiringSim" / "Content").resolve()
         if candidate.exists():

@@ -158,12 +158,29 @@ class ScenarioRegistry:
     def check_availability(self, definition: ScenarioDefinition) -> bool:
         """
         Verifies scenario asset availability on disk and package compatibility.
+        Supports both packaged .pak/.ucas containers and loose editor .umap assets.
         """
         if not definition.default_available:
             return False
-        if self.content_dir and definition.relative_map_path:
-            full_path = self.content_dir / definition.relative_map_path
-            return full_path.exists()
+
+        if self.content_dir:
+            # 1. If running against a packaged build with .pak / .ucas container, all cooked levels are packed
+            paks_dir = self.content_dir / "Paks"
+            if paks_dir.exists() and any(paks_dir.glob("*.pak")):
+                return True
+
+            # 2. Check for loose map file in content_dir
+            if definition.relative_map_path:
+                full_path = self.content_dir / definition.relative_map_path
+                if full_path.exists():
+                    return True
+
+        # 3. Check fallback raw editor content folder if content_dir didn't have loose maps
+        raw_editor_content = Path(r"F:\Shooter\FiringSimulator\Unreal\FiringSim\Content")
+        if raw_editor_content.exists() and definition.relative_map_path:
+            if (raw_editor_content / definition.relative_map_path).exists():
+                return True
+
         return definition.default_available
 
     def list_scenarios(self) -> List[ScenarioInfo]:
